@@ -86,9 +86,8 @@ export function AIInsightsPanel({ medications, logs = [] }: { medications: Med[]
         const fallback = fallbackInsights();
         setData(fallback);
         toast({
-          title: "AI returned empty response",
-          description: "Showing fallback insights.",
-          variant: "destructive",
+          title: "Enhanced AI insights unavailable right now. Showing smart local guidance.",
+          description: "",
         });
         return;
       }
@@ -100,9 +99,8 @@ export function AIInsightsPanel({ medications, logs = [] }: { medications: Med[]
         const fallback = fallbackInsights();
         setData(fallback);
         toast({
-          title: "AI insights temporarily unavailable",
-          description: "Showing fallback insights.",
-          variant: "destructive",
+          title: "Enhanced AI insights unavailable right now. Showing smart local guidance.",
+          description: "",
         });
         return;
       }
@@ -129,9 +127,8 @@ export function AIInsightsPanel({ medications, logs = [] }: { medications: Med[]
 
       if (normalized.fallback) {
         toast({
-          title: "AI insights temporarily unavailable",
-          description: "Using safe local guidance for now.",
-          variant: "destructive",
+          title: "Enhanced AI insights unavailable right now. Showing smart local guidance.",
+          description: "",
         });
       }
 
@@ -140,9 +137,8 @@ export function AIInsightsPanel({ medications, logs = [] }: { medications: Med[]
       const fallback = fallbackInsights();
       setData(fallback);
       toast({
-        title: "AI insights unavailable",
-        description: "Showing fallback insights.",
-        variant: "destructive",
+        title: "Enhanced AI insights unavailable right now. Showing smart local guidance.",
+        description: "",
       });
     } finally {
       setLoading(false);
