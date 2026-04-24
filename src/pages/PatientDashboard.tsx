@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useUser } from "@clerk/clerk-react";
-import { format } from "date-fns";
+import { format, parse } from "date-fns";
 import { Plus, Pill, Check, Clock, Sparkles, Loader2 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -30,6 +30,13 @@ interface LogRow {
   status: "pending" | "taken" | "missed";
 }
 
+interface ScheduleRow {
+  medication_id: string;
+  scheduled_time: string;
+  taken_at: string | null;
+  status: "pending" | "taken" | "missed";
+}
+
 export default function PatientDashboard() {
   const { user } = useUser();
   const { profile } = useProfile();
@@ -39,6 +46,48 @@ export default function PatientDashboard() {
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const today = format(new Date(), "yyyy-MM-dd");
+  const now = new Date();
+
+  const todaySchedule = useMemo(() => {
+    return meds
+      .flatMap((m) =>
+        m.times.map((t) => {
+          const scheduledISO = `${today}T${t}:00`;
+          const scheduledDate = parse(scheduledISO, "yyyy-MM-dd'T'HH:mm:ss", new Date());
+          const existingLog = logs.find((lg) => lg.medication_id === m.id && lg.scheduled_time.startsWith(`${today}T${t}`));
+          const isTaken = existingLog?.status === "taken" || Boolean(existingLog?.taken_at);
+          const isPastDue = scheduledDate.getTime() < now.getTime();
+          const status: "pending" | "taken" | "missed" = isTaken ? "taken" : isPastDue ? "missed" : "pending";
+
+          return {
+            med: m,
+            time: t,
+            scheduledISO,
+            log: existingLog,
+            status,
+          };
+        }),
+      )
+      .sort((a, b) => a.time.localeCompare(b.time));
+  }, [logs, meds, now, today]);
+
+  const scheduleHistory: ScheduleRow[] = useMemo(() => {
+    return todaySchedule.map((entry) => ({
+      medication_id: entry.med.id,
+      scheduled_time: entry.scheduledISO,
+      taken_at: entry.log?.taken_at ?? null,
+      status: entry.status,
+    }));
+  }, [todaySchedule]);
+
+  const summary = useMemo(() => {
+    const taken = todaySchedule.filter((s) => s.status === "taken").length;
+    const missed = todaySchedule.filter((s) => s.status === "missed").length;
+    const pending = todaySchedule.filter((s) => s.status === "pending").length;
+    const total = todaySchedule.length;
+    const adherence = total > 0 ? Math.round((taken / total) * 100) : 0;
+    return { taken, missed, pending, total, adherence };
+  }, [todaySchedule]);
 
   const load = async () => {
     if (!profile) return;
@@ -56,14 +105,6 @@ export default function PatientDashboard() {
     if (profile) load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile?.id]);
-
-  const todaySchedule = meds.flatMap((m) =>
-    m.times.map((t) => {
-      const scheduledISO = `${today}T${t}:00`;
-      const log = logs.find((lg) => lg.medication_id === m.id && lg.scheduled_time.startsWith(`${today}T${t}`));
-      return { med: m, time: t, scheduledISO, log };
-    }),
-  ).sort((a, b) => a.time.localeCompare(b.time));
 
   const markTaken = async (medId: string, scheduledISO: string, existingId?: string) => {
     if (!profile) return;
@@ -97,7 +138,9 @@ export default function PatientDashboard() {
           <Card className="border-0 shadow-card">
             <CardHeader className="flex-row items-center justify-between">
               <CardTitle className="flex items-center gap-2 text-lg"><Clock className="h-5 w-5 text-primary" /> Today's medications</CardTitle>
-              <span className="text-xs text-muted-foreground">{todaySchedule.filter((s) => s.log?.status === "taken").length} / {todaySchedule.length} taken</span>
+              <span className="text-xs text-muted-foreground">
+                {summary.taken} taken · {summary.missed} missed · {summary.pending} pending
+              </span>
             </CardHeader>
             <CardContent>
               {loading ? (
@@ -107,7 +150,7 @@ export default function PatientDashboard() {
               ) : (
                 <ul className="divide-y">
                   {todaySchedule.map((s) => {
-                    const taken = s.log?.status === "taken";
+                    const taken = s.status === "taken";
                     return (
                       <li key={`${s.med.id}-${s.time}`} className="flex items-center justify-between gap-4 py-3">
                         <div className="flex items-center gap-3">
@@ -155,7 +198,7 @@ export default function PatientDashboard() {
         </div>
 
         <div id="ai-insights" className="lg:col-span-1 scroll-mt-24">
-          <AIInsightsPanel medications={meds} logs={logs} />
+          <AIInsightsPanel medications={meds} logs={scheduleHistory} />
         </div>
       </div>
     </AppShell>

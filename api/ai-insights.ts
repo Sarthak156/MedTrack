@@ -31,6 +31,22 @@ function clampScore(value: number) {
   return Math.max(0, Math.min(100, Math.round(value)));
 }
 
+function extractJsonText(text: string) {
+  const trimmed = text.trim();
+  if (!trimmed) return "";
+
+  const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+  if (fenced?.[1]) return fenced[1].trim();
+
+  const firstBrace = trimmed.indexOf("{");
+  const lastBrace = trimmed.lastIndexOf("}");
+  if (firstBrace >= 0 && lastBrace > firstBrace) {
+    return trimmed.slice(firstBrace, lastBrace + 1).trim();
+  }
+
+  return trimmed;
+}
+
 function buildFallback(medications: Med[], logs: AdherenceLog[] = [], reason?: string): InsightsResponse {
   const medCount = medications.length;
   const taken = logs.filter((l) => l.status === "taken").length;
@@ -107,6 +123,7 @@ async function askGemini(medications: Med[], logs: AdherenceLog[], geminiKey: st
 
   const userPrompt = `You are an adherence coaching assistant. Provide practical, personalized medication routine guidance.
 Do not diagnose and do not provide medical treatment instructions. Include only general safety reminders.
+Return ONLY valid JSON. No markdown. No explanation text. No code block.
 
 Medication list:\n${medications
     .map((m) => `- ${m.name} ${m.dosage}; ${m.frequency}; times: ${m.times.join(", ") || "not specified"}`)
@@ -170,10 +187,11 @@ Medication list:\n${medications
   }
 
   try {
-    const parsed = JSON.parse(text);
+    const parsed = JSON.parse(extractJsonText(text));
     return normalizeInsights(parsed, fallback);
-  } catch {
-    return { ...fallback, error: "Gemini returned malformed JSON." };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Gemini returned malformed JSON.";
+    return { ...fallback, error: message };
   }
 }
 

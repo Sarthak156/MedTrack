@@ -26,6 +26,22 @@ interface Insights {
   error?: string;
 }
 
+function extractJsonText(text: string) {
+  const trimmed = text.trim();
+  if (!trimmed) return "";
+
+  const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+  if (fenced?.[1]) return fenced[1].trim();
+
+  const firstBrace = trimmed.indexOf("{");
+  const lastBrace = trimmed.lastIndexOf("}");
+  if (firstBrace >= 0 && lastBrace > firstBrace) {
+    return trimmed.slice(firstBrace, lastBrace + 1).trim();
+  }
+
+  return trimmed;
+}
+
 export function AIInsightsPanel({ medications, logs = [] }: { medications: Med[]; logs?: LogRow[] }) {
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<Insights | null>(null);
@@ -95,7 +111,7 @@ export function AIInsightsPanel({ medications, logs = [] }: { medications: Med[]
 
       let payload: Insights | { error?: string };
       try {
-        payload = JSON.parse(text) as Insights | { error?: string };
+        payload = JSON.parse(extractJsonText(text)) as Insights | { error?: string };
       } catch {
         const fallback = fallbackInsights();
         setData(fallback);
