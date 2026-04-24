@@ -31,12 +31,25 @@ function clampScore(value: number) {
   return Math.max(0, Math.min(100, Math.round(value)));
 }
 
-function extractJsonText(text: string) {
+function stripCodeFences(text: string) {
   const trimmed = text.trim();
-  if (!trimmed) return "";
+  const fenced = trimmed.match(/```(?:json|text)?\s*([\s\S]*?)\s*```/i);
+  return fenced?.[1]?.trim() || trimmed;
+}
 
-  const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
-  if (fenced?.[1]) return fenced[1].trim();
+function sanitizeAiText(text: string) {
+  const noFences = stripCodeFences(text)
+    .replace(/\u0000/g, "")
+    .replace(/[\u0001-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, "")
+    .replace(/\r\n?/g, "\n")
+    .trim();
+
+  return noFences;
+}
+
+function extractJsonText(text: string) {
+  const trimmed = sanitizeAiText(text);
+  if (!trimmed) return "";
 
   const firstBrace = trimmed.indexOf("{");
   const lastBrace = trimmed.lastIndexOf("}");
@@ -45,6 +58,71 @@ function extractJsonText(text: string) {
   }
 
   return trimmed;
+}
+
+function parseBulletList(input: string) {
+  return input
+    .split("\n")
+    .map((line) => line.replace(/^\s*[-*\u2022\d.\)]+\s*/, "").trim())
+    .filter(Boolean);
+}
+
+function extractSection(text: string, label: string) {
+  const escapedLabel = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const regex = new RegExp(`(?:^|\\n)\\s*${escapedLabel}\\s*:\\s*([\\s\\S]*?)(?=\\n\\s*[A-Z_ ]+\\s*:|$)`, "i");
+  const match = text.match(regex);
+  return match?.[1]?.trim() || "";
+}
+
+function parseSectionResponse(text: string, fallback: InsightsResponse): InsightsResponse {
+  const clean = sanitizeAiText(text);
+  if (!clean) return { ...fallback, error: "AI returned an empty response." };
+
+  const title = extractSection(clean, "TITLE");
+  const summary = extractSection(clean, "SUMMARY");
+  const tipsRaw = extractSection(clean, "TIPS");
+  const warningsRaw = extractSection(clean, "WARNINGS");
+  const scoreRaw = extractSection(clean, "SCORE");
+  const interactionRaw = extractSection(clean, "INTERACTIONS");
+
+  const tips = parseBulletList(tipsRaw);
+  const warnings = parseBulletList(warningsRaw);
+  const reminders = tips.length > 0 ? tips : fallback.reminders;
+
+  const scoreMatch = scoreRaw.match(/-?\d+(?:\.\d+)?/);
+  const score = scoreMatch ? clampScore(Number(scoreMatch[0])) : fallback.score;
+
+  const interactionWarnings = parseBulletList(interactionRaw)
+    .slice(0, 4)
+    .map((line) => {
+      const medTokens = line
+        .split(/\+|,| and /i)
+        .map((s) => s.trim())
+        .filter((s) => s.length > 1)
+        .slice(0, 3);
+      const severity = /high/i.test(line) ? "high" : /moderate/i.test(line) ? "moderate" : "low";
+      return {
+        meds: medTokens.length > 0 ? medTokens : ["Medication overlap"],
+        severity,
+        note: line,
+      };
+    });
+
+  const hasAnySection = !!(title || summary || tips.length > 0 || warnings.length > 0 || scoreMatch);
+  if (!hasAnySection) {
+    return { ...fallback, error: "AI response format was invalid. Showing safe fallback insights." };
+  }
+
+  return {
+    title: title || fallback.title,
+    adherence_summary: summary || fallback.adherence_summary,
+    summary: summary || fallback.summary,
+    tips: tips.length > 0 ? tips : fallback.tips,
+    reminders,
+    warnings: warnings.length > 0 ? warnings : fallback.warnings,
+    score,
+    interaction_warnings: interactionWarnings,
+  };
 }
 
 function buildFallback(medications: Med[], logs: AdherenceLog[] = [], reason?: string): InsightsResponse {
@@ -123,11 +201,24 @@ async function askGemini(medications: Med[], logs: AdherenceLog[], geminiKey: st
 
   const userPrompt = `You are an adherence coaching assistant. Provide practical, personalized medication routine guidance.
 Do not diagnose and do not provide medical treatment instructions. Include only general safety reminders.
-Return ONLY valid JSON. No markdown. No explanation text. No code block.
+Do NOT return JSON. Do NOT use markdown or code blocks.
+Return plain text using EXACT section headers in this order:
+TITLE:
+SUMMARY:
+TIPS:
+WARNINGS:
+SCORE:
+INTERACTIONS:
+
+Formatting rules:
+- TIPS, WARNINGS, and INTERACTIONS must be bullet lines starting with "- "
+- SCORE must be a single number from 0 to 100
+- Keep output concise, personalized, and actionable
+- Never include extra headers beyond the required ones
 
 Medication list:\n${medications
     .map((m) => `- ${m.name} ${m.dosage}; ${m.frequency}; times: ${m.times.join(", ") || "not specified"}`)
-    .join("\n")}\n\nAdherence history (recent): taken=${taken}, missed=${missed}, pending=${pending}.\n\nGenerate JSON only:\n{\n  "title": "Adherence Overview",\n  "adherence_summary": "Detailed personalized summary",\n  "summary": "More context around consistency and patterns",\n  "tips": ["..."],\n  "reminders": ["..."],\n  "warnings": ["..."],\n  "score": 0-100,\n  "interaction_warnings": [{"meds": ["A","B"], "severity": "low|moderate|high", "note": "general caution"}]\n}`;
+    .join("\n")}\n\nAdherence history (recent): taken=${taken}, missed=${missed}, pending=${pending}.\n\nFocus on pattern-based coaching tailored to this exact medication list and timing behavior.`;
 
   const callGemini = async (model: string) => {
     const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiKey}`;
@@ -138,7 +229,7 @@ Medication list:\n${medications
         },
       ],
       generationConfig: {
-        responseMimeType: "application/json",
+        responseMimeType: "text/plain",
         temperature: 0.2,
         maxOutputTokens: 1400,
       },
@@ -186,13 +277,55 @@ Medication list:\n${medications
     return { ...fallback, error: "Gemini returned an empty response." };
   }
 
-  try {
-    const parsed = JSON.parse(extractJsonText(text));
-    return normalizeInsights(parsed, fallback);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Gemini returned malformed JSON.";
-    return { ...fallback, error: message };
+  const sanitizedText = sanitizeAiText(text);
+  const sectionParsed = parseSectionResponse(sanitizedText, fallback);
+  if (!sectionParsed.fallback) {
+    return sectionParsed;
   }
+
+  // Secondary compatibility path: if model still returns JSON-like content, sanitize then parse safely.
+  const jsonCandidate = extractJsonText(sanitizedText);
+  if (jsonCandidate.startsWith("{") && jsonCandidate.endsWith("}")) {
+    try {
+      const escaped = jsonCandidate
+        .replace(/[\u0000-\u001F\u007F]/g, (ch) => {
+          if (ch === "\n" || ch === "\t") return ch;
+          return "";
+        })
+        .replace(/\r\n?/g, "\n");
+
+      const parsed = JSON.parse(escaped);
+      return normalizeInsights(parsed, fallback);
+    } catch {
+      const compact = sanitizeAiText(jsonCandidate)
+        .split("\n")
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .join(" ");
+      const safeSummary = compact ? `AI summary: ${compact.slice(0, 420)}` : fallback.summary;
+      return {
+        ...fallback,
+        adherence_summary: safeSummary,
+        summary: safeSummary,
+        tips: fallback.tips,
+        error: "AI response required fallback parsing.",
+      };
+    }
+  }
+
+  const plain = sanitizeAiText(text);
+  const lines = plain
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const stitched = lines.join(" ").slice(0, 420);
+
+  return {
+    ...fallback,
+    adherence_summary: stitched ? `AI summary: ${stitched}` : fallback.adherence_summary,
+    summary: stitched || fallback.summary,
+    error: "AI response required fallback parsing.",
+  };
 }
 
 function normalizeMeds(input: unknown): Med[] {
