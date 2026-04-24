@@ -8,9 +8,10 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { useSupabase } from "@/hooks/use-supabase";
 import { useServiceRoleProfile } from "@/hooks/use-service-role-profile";
+import { getRoleHome } from "@/lib/routes";
 import type { Role } from "@/lib/supabase";
 import { toast } from "@/hooks/use-toast";
-import { HeartPulse, Loader2, User, Users } from "lucide-react";
+import { ArrowLeft, HeartPulse, Loader2, User, Users } from "lucide-react";
 
 export default function Onboarding() {
   const { user, isLoaded } = useUser();
@@ -34,14 +35,17 @@ export default function Onboarding() {
   if (!isLoaded || loading) return null;
   if (!user) return <Navigate to="/sign-in" replace />;
   if (profile) {
-    const home =
-      profile.role === "admin"
-        ? "/admin"
-        : profile.role === "caregiver"
-        ? "/caregiver"
-        : "/patient";
-    return <Navigate to={home} replace />;
+    return <Navigate to={getRoleHome(profile.role)} replace />;
   }
+
+  const goBack = () => {
+    if (window.history.length > 1) {
+      navigate(-1);
+      return;
+    }
+
+    navigate("/sign-in", { replace: true });
+  };
 
   const submit = async () => {
     if (!fullName.trim()) {
@@ -92,11 +96,21 @@ export default function Onboarding() {
 
     toast({ title: "Welcome aboard!" });
     await refresh();
-    navigate(role === "caregiver" ? "/caregiver" : "/patient", { replace: true });
+    navigate(role === "caregiver" ? "/caregiver" : "/dashboard", { replace: true });
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-soft p-4">
+    <div className="relative flex min-h-screen items-center justify-center bg-gradient-soft p-4">
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        onClick={goBack}
+        className="absolute left-4 top-4 gap-2 rounded-full bg-background/80 backdrop-blur-sm"
+      >
+        <ArrowLeft className="h-4 w-4" />
+        Back
+      </Button>
       <Card className="w-full max-w-lg border-0 shadow-elevated">
         <CardHeader>
           <CardTitle className="text-2xl">Welcome to MedTrack</CardTitle>

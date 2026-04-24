@@ -154,7 +154,7 @@ export default function PatientDashboard() {
           </Card>
         </div>
 
-        <div className="lg:col-span-1">
+        <div id="ai-insights" className="lg:col-span-1 scroll-mt-24">
           <AIInsightsPanel medications={meds} />
         </div>
       </div>

@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Pill, ShieldCheck, Sparkles, HeartPulse } from "lucide-react";
 import { useServiceRoleProfile } from "@/hooks/use-service-role-profile";
+import { getRoleHome } from "@/lib/routes";
 import { Loader2 } from "lucide-react";
 
 const features = [
@@ -28,14 +29,7 @@ function Authed() {
   if (!profile) return <Navigate to="/onboarding" replace />;
 
   // Profile exists → send to correct dashboard
-  const home =
-    profile.role === "admin"
-      ? "/admin"
-      : profile.role === "caregiver"
-      ? "/caregiver"
-      : "/patient";
-
-  return <Navigate to={home} replace />;
+  return <Navigate to={getRoleHome(profile.role)} replace />;
 }
 
 const Index = () => {

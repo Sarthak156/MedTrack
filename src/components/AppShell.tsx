@@ -6,8 +6,8 @@ import type { ReactNode } from "react";
 
 const navByRole = {
   patient: [
-    { to: "/patient", label: "My Meds", icon: Pill },
-    { to: "/patient/insights", label: "AI Insights", icon: Activity },
+    { to: "/dashboard", label: "My Meds", icon: Pill },
+    { to: "/dashboard#ai-insights", label: "AI Insights", icon: Activity },
   ],
   caregiver: [{ to: "/caregiver", label: "My Patients", icon: Activity }],
   admin: [{ to: "/admin", label: "Admin", icon: Activity }],

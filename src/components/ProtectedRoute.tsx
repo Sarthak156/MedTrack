@@ -1,6 +1,7 @@
 import { useUser } from "@clerk/clerk-react";
 import { Navigate, useLocation } from "react-router-dom";
 import { useServiceRoleProfile } from "@/hooks/use-service-role-profile";
+import { getRoleHome } from "@/lib/routes";
 import type { Role } from "@/lib/supabase";
 import { Loader2 } from "lucide-react";
 
@@ -32,13 +33,7 @@ export function ProtectedRoute({
   }
 
   if (roles && !roles.includes(profile.role)) {
-    const home =
-      profile.role === "admin"
-        ? "/admin"
-        : profile.role === "caregiver"
-        ? "/caregiver"
-        : "/patient";
-    return <Navigate to={home} replace />;
+    return <Navigate to={getRoleHome(profile.role)} replace />;
   }
 
   return <>{children}</>;
