@@ -143,17 +143,19 @@ Medication list:\n${medications
     return { ok: true as const, raw };
   };
 
-  const preferredModel =
-    (globalThis as unknown as { process?: { env?: Record<string, string | undefined> } })
-      ?.process?.env?.GEMINI_MODEL || "gemini-1.5-flash";
+  const modelFallbackOrder = ["gemini-2.5-flash", "gemini-2-flash", "gemini-2-flash-lite", "gemini-2.5-pro"];
 
-  let result = await callGemini(preferredModel);
+  let result = await callGemini(modelFallbackOrder[0]);
 
   if (!result.ok) {
-    const isModelNotFound =
+    const isModelIssue =
       result.status === 404 || /model|not found|unsupported|unknown/i.test(result.body || "");
-    if (isModelNotFound && preferredModel !== "gemini-1.5-flash") {
-      result = await callGemini("gemini-1.5-flash");
+
+    if (isModelIssue) {
+      for (const model of modelFallbackOrder.slice(1)) {
+        result = await callGemini(model);
+        if (result.ok) break;
+      }
     }
   }
 
