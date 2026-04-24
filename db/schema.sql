@@ -1,4 +1,4 @@
--- MediMind schema — PL/pgSQL fixed version
+-- MedTrack schema — PL/pgSQL fixed version
 -- (reflects fix for "syntax error at or near if" — IF/THEN requires PL/pgSQL)
 -- Copy/paste into Supabase SQL Editor and run.
 

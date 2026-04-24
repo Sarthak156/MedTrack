@@ -51,7 +51,7 @@ const Index = () => {
               <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-hero shadow-card">
                 <Pill className="h-5 w-5 text-primary-foreground" />
               </div>
-              <span className="text-lg font-semibold">MediMind</span>
+              <span className="text-lg font-semibold">MedTrack</span>
             </div>
             <div className="flex items-center gap-2">
               <Button asChild variant="ghost"><Link to="/sign-in">Sign in</Link></Button>
@@ -68,7 +68,7 @@ const Index = () => {
                 Never miss a dose. <span className="bg-gradient-hero bg-clip-text text-transparent">Ever.</span>
               </h1>
               <p className="mt-5 text-lg text-muted-foreground">
-                MediMind helps patients, caregivers, and clinicians stay aligned — with smart reminders,
+                MedTrack helps patients, caregivers, and clinicians stay aligned — with smart reminders,
                 shared dashboards, and AI insights that catch what humans miss.
               </p>
               <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">

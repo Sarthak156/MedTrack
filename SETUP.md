@@ -1,4 +1,4 @@
-# MediMind Setup
+# MedTrack Setup
 
 ## 1. Fill in `.env`
 ```
@@ -25,7 +25,7 @@ supabase/migrations/0001_init.sql
 supabase login
 supabase link --project-ref YOUR-REF
 supabase functions deploy ai-insights --no-verify-jwt
-supabase secrets set LOVABLE_API_KEY=your_key   # or OPENAI_API_KEY=sk-...
+supabase secrets set MEDTRACK_API_KEY=your_key   # or OPENAI_API_KEY=sk-...
 ```
 
 ## 5. Promote your first admin

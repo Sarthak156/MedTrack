@@ -99,7 +99,7 @@ export default function Onboarding() {
     <div className="flex min-h-screen items-center justify-center bg-gradient-soft p-4">
       <Card className="w-full max-w-lg border-0 shadow-elevated">
         <CardHeader>
-          <CardTitle className="text-2xl">Welcome to MediMind</CardTitle>
+          <CardTitle className="text-2xl">Welcome to MedTrack</CardTitle>
           <p className="text-sm text-muted-foreground">Tell us a little about how you will use the app.</p>
         </CardHeader>
         <CardContent className="space-y-6">

@@ -25,7 +25,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-hero shadow-card">
               <Pill className="h-5 w-5 text-primary-foreground" />
             </div>
-            <span className="text-lg font-semibold tracking-tight">MediMind</span>
+            <span className="text-lg font-semibold tracking-tight">MedTrack</span>
           </NavLink>
           <nav className="hidden items-center gap-1 md:flex">
             {items.map((it) => (

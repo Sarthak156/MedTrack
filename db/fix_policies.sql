@@ -1,5 +1,5 @@
 -- =============================================================================
--- MediMind DB Fix — PL/pgSQL is_admin() + clean RLS policies
+-- MedTrack DB Fix — PL/pgSQL is_admin() + clean RLS policies
 --
 -- Fix for: "syntax error at or near if" (IF only works in PL/pgSQL, not SQL)
 --
