@@ -1,0 +1,7 @@
+{
+  "nodeModulesDir": "auto",
+  "allowScripts": {
+    "allow": ["npm:@clerk/shared", "npm:@swc/core", "npm:esbuild@0.21.5", "npm:esbuild@0.25.12"],
+    "deny": ["npm:@clerk/shared@3.47.5", "npm:@swc/core@1.15.30"]
+  }
+}
