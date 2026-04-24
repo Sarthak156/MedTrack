@@ -1,11 +1,6 @@
 /// <reference lib="deno.ns" />
-// Edge function: ai-insights
-// Deploy:
-//   supabase functions deploy ai-insights --no-verify-jwt
-// Set secret:
-//   supabase secrets set GEMINI_API_KEY=xxx
-//
-// Uses Google Gemini Pro API for AI insights.
+// Legacy Edge Function (deprecated).
+// AI insights are now served by the Vercel serverless route at /api/ai-insights.
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { serve } from "https://deno.land/std@0.215.0/http/server.ts";

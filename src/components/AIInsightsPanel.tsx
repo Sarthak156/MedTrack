@@ -1,49 +1,152 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Sparkles, Loader2, AlertTriangle, TrendingUp } from "lucide-react";
-import { useAuth } from "@clerk/clerk-react";
 import { toast } from "@/hooks/use-toast";
 
 interface Med { id: string; name: string; dosage: string; frequency: string; times: string[] }
-
-interface Insights {
-  adherence_summary: string;
-  tips: string[];
-  interaction_warnings: { meds: string[]; severity: "low" | "moderate" | "high"; note: string }[];
+interface LogRow {
+  medication_id: string;
+  scheduled_time: string;
+  taken_at: string | null;
+  status: "pending" | "taken" | "missed";
 }
 
-export function AIInsightsPanel({ medications }: { medications: Med[] }) {
-  const { getToken } = useAuth();
+interface Insights {
+  title: string;
+  adherence_summary: string;
+  summary: string;
+  tips: string[];
+  reminders: string[];
+  warnings: string[];
+  score: number;
+  interaction_warnings: { meds: string[]; severity: "low" | "moderate" | "high"; note: string }[];
+  reminders?: string[];
+  fallback?: boolean;
+  error?: string;
+}
+
+export function AIInsightsPanel({ medications, logs = [] }: { medications: Med[]; logs?: LogRow[] }) {
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<Insights | null>(null);
+  const inFlightRef = useRef(false);
 
-  const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-insights`;
+  const fallbackInsights = (): Insights => {
+    const taken = logs.filter((l) => l.status === "taken").length;
+    const missed = logs.filter((l) => l.status === "missed").length;
+    const scoreBase = logs.length > 0 ? (taken / logs.length) * 100 - missed * 5 : medications.length > 0 ? 70 : 0;
+    const score = Math.max(0, Math.min(100, Math.round(scoreBase)));
+
+    const tips = medications.slice(0, 4).map((m) => {
+      const when = m.times.length > 0 ? m.times.join(", ") : "your scheduled times";
+      return `Take ${m.name} (${m.dosage}) at ${when}.`;
+    });
+
+    return {
+      title: "Adherence",
+      adherence_summary: "Insights temporarily unavailable.",
+      summary: medications.length > 0
+        ? `Tracked doses: ${taken} taken, ${missed} missed. Keep timing consistent for better adherence.`
+        : "Add medications to generate personalized insights.",
+      tips: tips.length > 0 ? tips : ["Set reminders for each dose window."],
+      reminders: tips.length > 0 ? tips : ["Set reminders for each dose window."],
+      warnings: missed > 0 ? ["You have missed doses today. Consider setting an evening reminder."] : [],
+      score,
+      interaction_warnings: [],
+      fallback: true,
+    };
+  };
 
   const generate = async () => {
+    if (inFlightRef.current) return;
+    inFlightRef.current = true;
     setLoading(true);
     try {
-      const token = await getToken({ template: "supabase" });
-      const res = await fetch(url, {
+      const res = await fetch("/api/ai-insights", {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-        body: JSON.stringify({ medications }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ medications, logs }),
       });
+
       if (!res.ok) {
-        if (res.status === 429) throw new Error("Rate limited — try again in a moment.");
-        if (res.status === 402) throw new Error("AI credits exhausted.");
-        throw new Error(`Edge function not deployed yet (${res.status}).`);
+        const errorText = await res.text();
+        let parsedError: { error?: string } | null = null;
+        if (errorText.trim()) {
+          try {
+            parsedError = JSON.parse(errorText) as { error?: string };
+          } catch {
+            parsedError = { error: errorText };
+          }
+        }
+        throw new Error(parsedError?.error || `AI API error (${res.status})`);
       }
-      const json = await res.json();
-      setData(json);
+
+      const text = await res.text();
+      if (!text.trim()) {
+        const fallback = fallbackInsights();
+        setData(fallback);
+        toast({
+          title: "AI returned empty response",
+          description: "Showing fallback insights.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      let payload: Insights | { error?: string };
+      try {
+        payload = JSON.parse(text) as Insights | { error?: string };
+      } catch {
+        const fallback = fallbackInsights();
+        setData(fallback);
+        toast({
+          title: "AI response parsing failed",
+          description: "Showing fallback insights.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const json = payload as Insights;
+      const tips = Array.isArray(json.tips) && json.tips.length > 0
+        ? json.tips
+        : Array.isArray(json.reminders)
+        ? json.reminders
+        : [];
+
+      const normalized: Insights = {
+        title: json.title || "Adherence Overview",
+        adherence_summary: json.adherence_summary || json.summary || fallbackInsights().adherence_summary,
+        summary: json.summary || json.adherence_summary || fallbackInsights().summary,
+        tips: tips.length > 0 ? tips : fallbackInsights().tips,
+        reminders: Array.isArray(json.reminders) ? json.reminders : tips,
+        warnings: Array.isArray(json.warnings) ? json.warnings : [],
+        score: typeof json.score === "number" ? Math.max(0, Math.min(100, Math.round(json.score))) : fallbackInsights().score,
+        interaction_warnings: Array.isArray(json.interaction_warnings) ? json.interaction_warnings : [],
+        fallback: json.fallback,
+        error: json.error,
+      };
+
+      if (normalized.fallback) {
+        toast({
+          title: "AI returned fallback insights",
+          description: normalized.error || "Using safe local guidance for now.",
+          variant: "destructive",
+        });
+      }
+
+      setData(normalized);
     } catch (e) {
+      const fallback = fallbackInsights();
+      setData(fallback);
       toast({
         title: "AI insights unavailable",
-        description: e instanceof Error ? e.message : "Deploy the ai-insights edge function in supabase/functions/.",
+        description: e instanceof Error ? e.message : "Server AI route failed. Showing fallback insights.",
         variant: "destructive",
       });
     } finally {
       setLoading(false);
+      inFlightRef.current = false;
     }
   };
 
@@ -65,8 +168,10 @@ export function AIInsightsPanel({ medications }: { medications: Med[] }) {
         {data && (
           <div className="space-y-4">
             <div>
-              <div className="flex items-center gap-2 text-sm font-medium"><TrendingUp className="h-4 w-4 text-primary" /> Adherence</div>
+              <div className="flex items-center gap-2 text-sm font-medium"><TrendingUp className="h-4 w-4 text-primary" /> {data.title || "Adherence"}</div>
               <p className="mt-1 text-sm text-muted-foreground">{data.adherence_summary}</p>
+              <p className="mt-1 text-sm text-muted-foreground">{data.summary}</p>
+              <p className="mt-1 text-xs text-muted-foreground">Adherence score: <span className="font-medium text-foreground">{data.score}%</span></p>
             </div>
 
             {data.tips?.length > 0 && (
@@ -92,6 +197,17 @@ export function AIInsightsPanel({ medications }: { medications: Med[] }) {
                     </div>
                   ))}
                 </div>
+              </div>
+            )}
+
+            {data.warnings?.length > 0 && (
+              <div>
+                <div className="flex items-center gap-2 text-sm font-medium"><AlertTriangle className="h-4 w-4 text-warning" /> General warnings</div>
+                <ul className="mt-2 space-y-1.5">
+                  {data.warnings.map((w, i) => (
+                    <li key={i} className="flex gap-2 text-sm text-muted-foreground"><span className="text-warning">•</span> {w}</li>
+                  ))}
+                </ul>
               </div>
             )}
           </div>

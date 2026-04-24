@@ -155,7 +155,7 @@ export default function PatientDashboard() {
         </div>
 
         <div id="ai-insights" className="lg:col-span-1 scroll-mt-24">
-          <AIInsightsPanel medications={meds} />
+          <AIInsightsPanel medications={meds} logs={logs} />
         </div>
       </div>
     </AppShell>

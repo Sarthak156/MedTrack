@@ -5,6 +5,7 @@
 VITE_CLERK_PUBLISHABLE_KEY=pk_test_...
 VITE_SUPABASE_URL=https://YOUR-PROJECT.supabase.co
 VITE_SUPABASE_ANON_KEY=eyJ...
+GEMINI_API_KEY=your_key
 ```
 
 ## 2. Configure Clerk → Supabase JWT
@@ -20,13 +21,11 @@ Open Supabase Dashboard → SQL Editor and run the contents of:
 supabase/migrations/0001_init.sql
 ```
 
-## 4. Deploy the AI insights edge function
-```bash
-supabase login
-supabase link --project-ref YOUR-REF
-supabase functions deploy ai-insights --no-verify-jwt
-supabase secrets set MEDTRACK_API_KEY=your_key   # or OPENAI_API_KEY=sk-...
-```
+## 4. Configure AI insights API on Vercel
+Create a Vercel environment variable named `GEMINI_API_KEY`.
+
+The app now uses `api/ai-insights.ts` at `/api/ai-insights` (Vercel serverless route),
+so no Supabase Edge Function deployment is required for AI insights.
 
 ## 5. Promote your first admin
 After signing up once, run in Supabase SQL Editor:
